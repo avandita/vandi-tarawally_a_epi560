@@ -1,0 +1,33 @@
+---
+title: "lab3"
+author: "Alie Vandi-tarawally"
+date: "2025-04-10"
+output: 
+  html_document:
+    df_print: paged
+    theme: cosmo
+    toc: yes
+  pdf_document:
+    toc: yes
+
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "build") })
+---
+Edited
+
+
+
+
+
+
+
+
+
+\pagebreak  
+
+## Code Appendix  
+ 
+```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE} 
+```
+
+
