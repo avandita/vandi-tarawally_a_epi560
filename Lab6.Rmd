@@ -1,5 +1,5 @@
 ---
-title: "EPI 560: Lab 6"
+title: "EPI 560: Lab 7"
 author: "Alie Vandi-tarawally"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: 
