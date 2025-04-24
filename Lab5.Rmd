@@ -1,0 +1,247 @@
+---
+title: "EPI 560: Lab 5"
+author: "Alie Vandi-tarawally"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+    html_document:
+        df_print: paged
+        theme: cosmo
+        toc: yes
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "build") })
+---
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+# Setup
+library(pacman)
+p_load("tidyverse", "knitr", "DBI", "RSQLite", "sqldf")
+```
+
+## Lab 5: Responses 
+### Part I
+```{r part_1, echo=FALSE, message=FALSE, warning=FALSE}
+datab <- dbConnect(SQLite(), dbname = "~/Documents/EPI560/epi560.sqlite")
+dbListTables(datab)
+
+#Q1. To count the number of participants
+
+count_demo <- dbGetQuery(datab, "SELECT COUNT(*) 
+AS PatientCount
+FROM  P_DEMO")
+kable(count_demo)
+
+#Q2. Join demographics and sleep quality tables and count the number of observations in each table.
+
+Demo_SD <- dbGetQuery(datab, "SELECT * FROM P_DEMO 
+INNER JOIN P_SLQ
+ON P_DEMO.SEQN = P_SLQ.SEQN")
+kable(head(Demo_SD, 5))
+
+count_Demo_SD <- dbGetQuery(datab, "SELECT COUNT(*) 
+AS PatientCount
+FROM P_DEMO 
+INNER JOIN P_SLQ 
+ON P_DEMO.SEQN = P_SLQ.SEQN;")
+kable(count_Demo_SD)
+```
+The number of patients included in the demographic dataset is `r Demo_SD$PatientCount`.
+The number of patients included in the merged dataset is `r count_Demo_SD$PatientCount`.
+### Part II
+```{r part_2, echo=FALSE, message=FALSE, warning=FALSE}
+datab <- dbConnect(SQLite(), dbname = "~/Documents/EPI560/epi560.sqlite")
+# Q.3 Some of the variables I would need for my final project
+DEM_AUD_SD <- dbGetQuery(datab, "SELECT 
+    P_DEMO.RIAGENDR,
+    P_DEMO.RIDAGEYR,
+    P_DEMO.DMDEDUC2,
+    P_DEMO.DMDMARTZ,
+    P_AUQ.AUQ054,
+    P_AUQ.AUQ060,
+    P_AUQ.AUQ070,
+    P_AUQ.AUQ080,
+    P_AUQ.AUQ090,
+    P_SLQ.SLQ300,
+    P_SLQ.SLQ310
+FROM 
+    P_DEMO
+LEFT JOIN 
+    P_AUQ ON P_DEMO.SEQN = P_AUQ.SEQN
+LEFT JOIN 
+    P_SLQ ON P_DEMO.SEQN = P_SLQ.SEQN
+LIMIT 5")
+kable(DEM_AUD_SD)
+
+# Variables needed to respond to the questions in Lab5 Part II
+DEM_AUD_SD_1 <- dbGetQuery(datab, "SELECT 
+    P_DEMO.RIAGENDR,
+    P_AUQ.AUQ054,
+    P_AUQ.AUQ060,
+    P_AUQ.AUQ070,
+    P_AUQ.AUQ080,
+    P_SLQ.SLQ300,
+    P_SLQ.SLQ310
+FROM 
+    P_DEMO
+LEFT JOIN 
+    P_AUQ ON P_DEMO.SEQN = P_AUQ.SEQN
+LEFT JOIN 
+    P_SLQ ON P_DEMO.SEQN = P_SLQ.SEQN
+LIMIT 5")
+kable(DEM_AUD_SD_1)
+
+# Q.4 Average usual sleep time among participants with good or excellent hearing
+Gd_Ext <- dbGetQuery(datab, "SELECT 
+    AVG(P_SLQ.SLQ310) AS Avg_SP_Time
+FROM 
+    P_AUQ
+LEFT JOIN 
+    P_SLQ ON P_AUQ.SEQN = P_SLQ.SEQN
+WHERE 
+    P_AUQ.AUQ054 IN (1, 2)  
+    AND P_SLQ.SLQ310 IS NOT NULL")
+kable(Gd_Ext)
+
+# Average usual sleep time among participants with  a little trouble, moderate trouble, or a lot of trouble with their hearing
+Mod_T <- dbGetQuery(datab, "SELECT 
+    AVG(P_SLQ.SLQ310) AS Avg_SP_Time
+FROM 
+    P_AUQ
+LEFT JOIN 
+    P_SLQ ON P_AUQ.SEQN = P_SLQ.SEQN
+WHERE 
+    P_AUQ.AUQ054 IN (3, 4, 5)  
+    AND P_SLQ.SLQ310 IS NOT NULL")
+kable(Mod_T)
+
+# Q.5. Repeat Q4 but with age variable added.
+DEM_AUD_SD_5 <- dbGetQuery(datab, "SELECT 
+    P_DEMO.RIDAGEYR,
+    P_AUQ.AUQ054,
+    P_AUQ.AUQ060,
+    P_AUQ.AUQ070,
+    P_AUQ.AUQ080,
+    P_SLQ.SLQ300,
+    P_SLQ.SLQ310
+FROM 
+    P_DEMO
+LEFT JOIN 
+    P_AUQ ON P_DEMO.SEQN = P_AUQ.SEQN
+LEFT JOIN 
+    P_SLQ ON P_DEMO.SEQN = P_SLQ.SEQN
+LIMIT 6")
+kable(DEM_AUD_SD_5)
+
+# Estimate the average sleep time for participants with either good or excellent hearing.
+
+Gd_Ext_5 <- dbGetQuery(datab, "SELECT 
+    P_DEMO.RIDAGEYR AS Age,
+    AVG(P_SLQ.SLQ310) AS Avg_SP_Time
+FROM 
+    P_AUQ
+LEFT JOIN 
+    P_SLQ ON P_AUQ.SEQN = P_SLQ.SEQN
+LEFT JOIN 
+    P_DEMO ON P_AUQ.SEQN = P_DEMO.SEQN
+WHERE 
+    P_AUQ.AUQ054 IN (1, 2)  
+    AND P_SLQ.SLQ310 IS NOT NULL
+    AND P_DEMO.RIDAGEYR IS NOT NULL
+GROUP BY 
+    P_DEMO.RIDAGEYR
+ORDER BY 
+    P_DEMO.RIDAGEYR
+LIMIT 6")
+kable(Gd_Ext_5)
+
+# Estimate the average sleep time for participants with moderate to troubled hearing. 
+Mod_T_5 <- dbGetQuery(datab, "SELECT 
+    P_DEMO.RIDAGEYR AS Age,
+    AVG(P_SLQ.SLQ310) AS Avg_SP_Time
+FROM 
+    P_AUQ
+LEFT JOIN 
+    P_SLQ ON P_AUQ.SEQN = P_SLQ.SEQN
+LEFT JOIN 
+    P_DEMO ON P_AUQ.SEQN = P_DEMO.SEQN
+WHERE 
+    P_AUQ.AUQ054 IN (3, 4, 5)  
+    AND P_SLQ.SLQ310 IS NOT NULL
+    AND P_DEMO.RIDAGEYR IS NOT NULL
+GROUP BY 
+    P_DEMO.RIDAGEYR
+ORDER BY 
+    P_DEMO.RIDAGEYR
+LIMIT 6")
+kable(Mod_T_5)
+
+# Q.6. 
+# Count missing values in the hearing disorder variables 
+Miss_P_SLQ <- dbGetQuery(datab, "SELECT
+  SUM(CASE WHEN AUQ054 IS NULL THEN 1 ELSE 0 END) AS missing_whisper,
+  SUM(CASE WHEN AUQ060 IS NULL THEN 1 ELSE 0 END) AS missing_normal,
+  SUM(CASE WHEN AUQ070 IS NULL THEN 1 ELSE 0 END) AS missing_shout
+FROM P_AUQ
+")
+kable(Miss_P_SLQ)
+# Stratify by age 50
+Miss_P_SLQ_50 <- dbGetQuery(datab, "SELECT
+  CASE WHEN d.RIDAGEYR < 50 THEN 'Under 50' ELSE '50 and over' END AS age,
+  COUNT(*) AS total,
+  SUM(CASE WHEN a.AUQ054 IS NULL THEN 1 ELSE 0 END) AS missing_whisper,
+  SUM(CASE WHEN a.AUQ060 IS NULL THEN 1 ELSE 0 END) AS missing_normal,
+  SUM(CASE WHEN a.AUQ070 IS NULL THEN 1 ELSE 0 END) AS missing_shout
+FROM P_AUQ a
+JOIN P_Demo d ON a.SEQN = d.SEQN
+GROUP BY age")
+kable(Miss_P_SLQ_50)
+
+# Stratify by sleep time over 8 hours
+Miss_P_SLQ_SP <- dbGetQuery(datab, "SELECT
+  CASE WHEN s.SLQ310 > 8 THEN 'Over 8 hrs' ELSE '8 or fewer hrs' END AS sleep,
+  COUNT(*) AS total,
+  SUM(CASE WHEN a.AUQ054 IS NULL THEN 1 ELSE 0 END) AS missing_whisper,
+  SUM(CASE WHEN a.AUQ060 IS NULL THEN 1 ELSE 0 END) AS missing_normal,
+  SUM(CASE WHEN a.AUQ070 IS NULL THEN 1 ELSE 0 END) AS missing_shout
+FROM P_AUQ a
+JOIN P_SLQ s ON a.SEQN = s.SEQN
+GROUP BY sleep")
+kable(Miss_P_SLQ_SP)
+
+# Note: I used chatgpt for this question. I copied the question and pasted in chatgpt with the prompt "I am struggling to understand the instruction in this question. Please unpack for me and explain how to execute it in DB Browser."
+
+# Q.7. Create a dataframe of participants with either good or excellent hearing who usually sleeps more than 8 hours per week
+
+SLQ_Good_8 <- dbGetQuery(datab, "SELECT P_AUQ.SEQN, P_AUQ.AUQ054, P_SLQ.SLQ310
+FROM P_AUQ AS P_AUQ
+JOIN P_SLQ AS P_SLQ ON P_AUQ.SEQN = P_SLQ.SEQN
+WHERE P_AUQ.AUQ054 IN (1, 2)
+  AND P_SLQ.SLQ310 > 8
+LIMIT 6")
+kable(SLQ_Good_8)
+```
+### Q4
+The average sleep time among participants with either good or excellent hearing is `r Gd_Ext$Avg_SP_Time`.
+
+The average sleep time among participants with  a little trouble, moderate
+trouble, or a lot of trouble with their hearing is `r Mod_T$Avg_SP_Time`.
+
+### Q5. 
+The average sleep time among the first six participants with either good or excellent hearing grouped by age are `r Gd_Ext_5$Avg_SP_Time`.
+
+The average sleep time among the first six participants with  a little trouble, moderate
+trouble, or a lot of trouble with their hearing grouped by age are `r Mod_T_5$Avg_SP_Time`.
+
+### Q6.
+Since the percentage of missingness greatly differ between the groups, the missingness is differential.
+
+### Q7
+The six participants with either good or excellent hearing who usually sleeps more than 8 hours per week are `r SLQ_Good_8$SLQ310`.
+
+
+
+\pagebreak  
+
+## Code Appendix  
+ 
+```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE} 
+```
