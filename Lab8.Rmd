@@ -1,0 +1,152 @@
+---
+title: "EPI 560: Lab 8"
+author: "Alie Vandi-tarawally"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+    html_document:
+        df_print: paged
+        theme: cosmo
+        toc: yes
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "build") })
+---
+## Setup
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+library(pacman)
+p_load("tidyverse", "knitr", "lubridate")
+```
+
+## Load the dataset 
+```{r load_data, echo=FALSE, message=FALSE, warning=FALSE}
+getwd()
+df <- read_csv("/Users/alievandi-tarawally/Downloads/lab8_data.csv")
+dplyr::tbl_df(df)
+utils::View(df)
+```
+## Lab 8: Responses  
+### Part 1
+```{r part_1, echo=FALSE, message=FALSE, warning=FALSE}
+# Create a new column called dx_date_local
+
+df <- df %>%
+  mutate(dx_date = as.POSIXct(dx_date, 
+                              format = "%Y-%m-%d %H:%M:%S", 
+                              tz = "UTC"))
+
+df$dx_date_local = as.POSIXct(df$dx_date)
+
+for (i in 1:nrow(df)) {
+  df$dx_date_local[i] <- force_tz(df$dx_date[i], 
+                                  tzone = df$time_zone[i])
+}
+dplyr::tbl_df(df)
+```
+## Convert local timezones into UTC
+```{r}
+df <- df %>%
+  rowwise() %>%
+  mutate(dx_date_utc = with_tz(dx_date_local, tzone = "UTC")) %>%
+  ungroup()
+
+head(df, 10)
+
+```
+After running the code above, I noticed there was no difference between the local and UTC timezones. To investigate further, I checked the local timezone and found that it was actually set to UTC. As a result, I correctly assigned the local timezones and then converted the times to UTC.
+
+```{r}
+# Check for the correct timezone of dx_date_local
+attr(df$dx_date_local, "tzone")
+
+# Correct local time zones
+df <- df %>%
+  rowwise() %>%
+  mutate(dx_date_local = force_tz(dx_date_local, tzone = time_zone)) %>%
+  ungroup()
+
+# Convert from local to UTC
+df <- df %>%
+  rowwise() %>%
+  mutate(dx_date_utc = with_tz(dx_date_local, tzone = "UTC")) %>%
+  ungroup()
+
+head(df, 5)
+
+```
+### Part 2
+#### code for part 2
+```{r part_2, echo=FALSE, message=FALSE, warning=FALSE}
+df_long <- df %>%
+  group_by(id) %>%
+  arrange(dx_date) %>%
+  mutate(rank = row_number()) %>%
+  ungroup()
+
+kable(head(df_long, 20))
+```
+b. The rank column assigns a sequential number to each event for the same patient. For example, when a patient experiences an infection for the first time, it is ranked as 1; the second infection is ranked as 2, and so on. In the table above, the patient with ID 138 first had COVID-19 on 2019-01-06 at 11:44:00 (UTC), which was assigned a rank of 1. The same patient later had Mumps on 2019-01-07 at 04:47:00 (UTC), which was assigned a rank of 2.
+
+```{r}
+df_wide <- df_long %>%
+  select(id, rank, dx, dx_date) %>%
+  pivot_wider(
+    names_from = rank,
+    values_from = c(dx, dx_date),
+    names_glue = "{.value}_{rank}"
+  )
+
+print(head(df_wide, 5))
+
+# Check if number of rows match number of unique IDs
+nrow(df_wide)
+n_distinct(df$id)
+```
+### Part 3
+#### code for part 3
+
+```{r}
+df_wide <- df_wide %>%
+  mutate(
+    
+    time_between_dxs = as.numeric(difftime(dx_date_2, dx_date_1, units = "days")),
+   
+    time_cat = case_when(
+      time_between_dxs <= 1 ~ "0-1 days",
+      time_between_dxs <= 30 ~ "2-30 days",
+      time_between_dxs <= 180 ~ "31-180 days",
+      time_between_dxs <= 365 ~ "181-365 days",
+      TRUE ~ ">365 days"
+    )
+  )
+
+head(df_wide)
+
+nrow(df_wide)
+```
+```{r}
+# Create a new column for patients with only one diagnosis
+df_wide <- df_wide %>%
+  mutate(
+    time_cat_with_one = ifelse(is.na(dx_2), "One diagnosis", time_cat)
+  )
+
+# Summarize the number of patients in each category, including the category for only one diagnosis.
+summary_df <- df_wide %>%
+  group_by(time_cat_with_one) %>%
+  summarise(patient_count = n_distinct(id)) %>%
+  arrange(time_cat_with_one)
+
+kable(summary_df, format = 'pipe', col.names = c("Category", "Number of Patients"))
+```
+
+
+
+
+
+
+
+\pagebreak  
+
+## Code Appendix  
+ 
+```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE} 
+```

@@ -1,0 +1,288 @@
+---
+title: "EPI 560: Lab9"
+author: "Alie Malcolm Vandi-tarawally"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+    html_document:
+        df_print: paged
+        theme: cosmo
+        toc: yes
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "build") })
+---
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+# Setup
+library(pacman)
+p_load("tidyverse", "knitr", "DBI", "RSQLite", "summarytools")
+```
+
+## Lab {X}: Responses  
+```{r part_1, echo=FALSE, message=FALSE, warning=FALSE}
+# code for part 1
+rm(list = ls())
+data <- data.frame(
+id = c(12325, 12325, 29080, 33422, 33422, 33422, 33422, 43245, 50989, 50989),
+county_fips = c(06001, 06001, 06041, 06055, 06055, 06055, 06055, 06097, 06075, 06075),
+state_fips = c(06,06,06,06,06,06,06,06,06,06),
+walking_minutes = rnorm(10, 30, 10)
+)
+head(data)
+
+# for loop
+unique_ids <- unique(data$id)
+data$cumulative_walking <- NA
+for (i in unique_ids) {
+cumulative_walking_for_id <- sum(data$walking_minutes[data$id == i]) %>% round(1)
+data$cumulative_walking[data$id == i] <- round(cumulative_walking_for_id, 1)
+message <- paste0("id", i, ": cumulative walking time = ",
+cumulative_walking_for_id, " minutes.")
+print(message)
+}
+
+# while loop
+i <- 1
+count <- 0
+threshold <- 60
+while (i <= nrow(data)) {
+if (data$cumulative_walking[i] > threshold) {count <- count + 1
+print(paste0("entry exceeds threshold, current count = ", count))
+} else {
+}
+i <- i + 1
+}
+
+# write another while loop example
+i <- 1
+count <- 0
+threshold <- 60
+
+# Print the count of entries exceeding the threshold
+print(paste0("number of entries exceeding the threshold: ", count))
+```
+```{r}
+pad_fips <- function(data, cols) {
+data <- data %>%
+mutate(across(all_of(cols),
+~ifelse(nchar(.) == 4 | nchar(.) == 1,
+paste0("0", .), .)))
+return(data)
+}
+columns_to_pad <- c("county_fips", "state_fips")
+new_data <- pad_fips(data, columns_to_pad)
+head(new_data)
+```
+### 1. Load NHANES database and create a dataframe
+```{r}
+datab <- dbConnect(SQLite(), dbname = "~/Documents/EPI560/epi560.sqlite")
+
+query <- "
+SELECT *
+FROM P_SLQ
+LEFT JOIN P_AUQ
+ON P_SLQ.SEQN = P_AUQ.SEQN
+"
+
+SLQ_AUQ_Merged <- dbGetQuery(datab, query)
+
+SLQ_AUQ_Merged
+```
+2. For this analysis, all responses that are marked as "refused to answer," "don't know," missing, or invalid will be treated as missing values (NAs). This approach allows for the consistent handling of non-informative or unreliable responses. By treating these entries as NAs, we avoid discarding entire observations, which helps preserve valuable data while maintaining the integrity of the analysis. We believe this will make our analysis accurate by reducing bias from excluding them or not accounting for them. 
+
+### 3.
+```{r}
+cleaned_data <- SLQ_AUQ_Merged 
+
+missing_values <- c("77777", "99999", "")
+
+cleaned_data$SLQ300[cleaned_data$SLQ300 %in% missing_values] <- NA
+
+cleaned_data$SLQ310[cleaned_data$SLQ310 %in% missing_values] <- NA
+
+# Print frequency tables for SLQ300 and SLQ310 after recoding
+after_cleaning <- cleaned_data[, c("SLQ300", "SLQ310")]
+
+print(freq(after_cleaning))
+```
+### 4.
+```{r}
+cleaned_sleep_data <- SLQ_AUQ_Merged
+
+vars_to_clean <- c("SLQ300", "SLQ310", "SLQ320", "SLQ330")
+
+missing_codes <- c("77777", "99999", "")
+
+# Recode loop
+for (var in vars_to_clean) {
+  cleaned_sleep_data[[var]][cleaned_sleep_data[[var]] %in% missing_codes] <- NA
+}
+
+freq(cleaned_sleep_data$SLQ320)
+```
+The for loop improved the process by avoiding manually writing the codes repetitively. 
+NHANES should maintain standardization of "missing" and "don't know" values to ensure consistent and accurate data cleaning, analysis and interpretation.
+5. 
+**Variables for analysis**
+- SLQ dataset
+  -- SLD012 (Sleep hours - weekdays or workdays)
+  -- SLD013 (Sleep hours - weekends)
+- AUQ dataset
+  -- AUQ054 (General condition of hearing)
+  -- AUQ060 (Hear a whisper from across a quiet room?)
+  -- AUQ070 (Hear normal voice across a quiet room?)
+  -- AUQ410d (Cause of hearing loss-Illness/Infections)
+- DEMO
+  -- RIAGENDR (Gender)
+  -- RIDAGEYR (Age in years at screening)
+
+
+### 6. 
+```{r}
+query <- "
+SELECT 
+  P_PAQ.PAQ610,
+  P_ALQ.ALQ121,
+  P_GHB.LBXGH,
+  P_AUQ.AUQ054,
+  P_SLQ.SLQ050
+FROM P_PAQ
+LEFT JOIN P_ALQ ON P_PAQ.SEQN = P_ALQ.SEQN
+LEFT JOIN P_GHB ON P_PAQ.SEQN = P_GHB.SEQN
+LEFT JOIN P_AUQ ON P_PAQ.SEQN = P_AUQ.SEQN
+LEFT JOIN P_SLQ ON P_PAQ.SEQN = P_SLQ.SEQN
+"
+selected_nhanes_data <- dbGetQuery(datab, query)
+
+head(selected_nhanes_data)
+
+```
+
+```{r}
+cleaned_nhanes <- selected_nhanes_data
+
+# Convert variables to character to ensure consistent handling of special codes
+cleaned_nhanes$PAQ610 <- as.character(cleaned_nhanes$PAQ610)
+cleaned_nhanes$ALQ121 <- as.character(cleaned_nhanes$ALQ121)
+cleaned_nhanes$LBXGH  <- as.character(cleaned_nhanes$LBXGH)
+cleaned_nhanes$AUQ054 <- as.character(cleaned_nhanes$AUQ054)
+cleaned_nhanes$SLQ050 <- as.character(cleaned_nhanes$SLQ050)
+
+# Clean variables: recode 77, 99, and "." as NA
+cleaned_nhanes$PAQ610[cleaned_nhanes$PAQ610 %in% c("77", "99", ".")] <- NA
+
+cleaned_nhanes$ALQ121[cleaned_nhanes$ALQ121 %in% c("77", "99", ".")] <- NA
+
+cleaned_nhanes$LBXGH[cleaned_nhanes$LBXGH %in% c(".")] <- NA
+
+cleaned_nhanes$AUQ054[cleaned_nhanes$AUQ054 %in% c("77", "99", ".")] <- NA
+
+cleaned_nhanes$SLQ050[cleaned_nhanes$SLQ050 %in% c("7", "9", ".")] <- NA
+
+# Show the first six rows of the cleaned dataset
+kable(head(cleaned_nhanes[, c("PAQ610", "ALQ121", "LBXGH", "AUQ054", "SLQ050")]))
+
+```
+### 7. 
+```{r}
+# Function to cap continuous variables at 5th and 95th percentiles
+clean_continuous_vars <- function(data, vars) {
+  for (var in vars) {
+    # Convert to numeric
+    data[[var]] <- as.numeric(data[[var]])
+    
+    # Calculate 5th and 95th percentiles, ignoring NA
+    p5 <- quantile(data[[var]], 0.05, na.rm = TRUE)
+    p95 <- quantile(data[[var]], 0.95, na.rm = TRUE)
+    
+    # Cap values outside of range
+    data[[var]] <- ifelse(data[[var]] < p5, p5,
+                          ifelse(data[[var]] > p95, p95, data[[var]]))
+  }
+  return(data)
+}
+
+# Function to recode categorical variables: 99 → 9999
+clean_categorical_vars <- function(data, vars) {
+  data <- data %>%
+    mutate(across(all_of(vars), ~ ifelse(. == "99", "9999", .)))
+  return(data)
+}
+
+nhanes_data <- selected_nhanes_data %>%
+  mutate(across(c("ALQ121", "SLQ050", "AUQ054"), as.character),
+         across(c("PAQ610", "LBXGH"), as.numeric))
+
+continuous_vars <- c("PAQ610", "LBXGH")
+categorical_vars <- c("ALQ121", "SLQ050", "AUQ054")
+
+# Apply cleaning functions
+cleaned_nhanes <- nhanes_data %>%
+  clean_continuous_vars(continuous_vars) %>%
+  clean_categorical_vars(categorical_vars)
+
+# View cleaned result
+kable(head(cleaned_nhanes[, c(continuous_vars, categorical_vars)]))
+```
+
+### 2nd part of Q7. 
+```{r}
+# Function to cap continuous variables at 5th and 95th percentiles
+clean_continuous_vars <- function(data, vars) {
+  for (var in vars) {
+    # Convert to numeric
+    data[[var]] <- as.numeric(data[[var]])
+    
+    # Calculate 5th and 95th percentiles, ignoring NA
+    p5 <- quantile(data[[var]], 0.05, na.rm = TRUE)
+    p95 <- quantile(data[[var]], 0.95, na.rm = TRUE)
+    
+    # Cap values outside the range
+    data[[var]] <- ifelse(data[[var]] < p5, p5,
+                          ifelse(data[[var]] > p95, p95, data[[var]]))
+  }
+  return(data)
+}
+
+# Function to recode categorical variables: 99 → 9999
+clean_categorical_vars <- function(data, vars) {
+  data <- data %>%
+    mutate(across(all_of(vars), ~ ifelse(. == "99", "9999", .)))
+  return(data)
+}
+
+original_nhanes <- selected_nhanes_data
+
+nhanes_data <- original_nhanes %>%
+  mutate(across(c("ALQ121", "SLQ050", "AUQ054"), as.character),
+         across(c("PAQ610", "LBXGH"), as.numeric))
+
+continuous_vars <- c("PAQ610", "LBXGH")
+categorical_vars <- c("ALQ121", "SLQ050", "AUQ054")
+
+cleaned_nhanes <- nhanes_data %>%
+  clean_continuous_vars(continuous_vars) %>%
+  clean_categorical_vars(categorical_vars)
+
+kable(head(cleaned_nhanes[, c(continuous_vars, categorical_vars)]))
+
+
+# Histogram of original LBXGH
+ggplot(original_nhanes, aes(x = as.numeric(LBXGH))) +
+  geom_histogram(binwidth = 0.2, fill = "skyblue", color = "black") +
+  labs(title = "Original Glycohemoglobin % (LBXGH)", x = "LBXGH", y = "Frequency")
+
+# Histogram of cleaned LBXGH
+ggplot(cleaned_nhanes, aes(x = as.numeric(LBXGH))) +
+  geom_histogram(binwidth = 0.2, fill = "darkgreen", color = "black") +
+  labs(title = "Cleaned Glycohemoglobin % (LBXGH)", x = "LBXGH", y = "Frequency")
+
+```
+
+
+
+\pagebreak  
+
+## Code Appendix  
+ 
+```{r, ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE} 
+```
