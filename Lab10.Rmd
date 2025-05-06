@@ -1,0 +1,130 @@
+---
+title: "EPI 560: Lab9"
+author: "Alie Malcolm Vandi-tarawally"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+    html_document:
+        df_print: paged
+        theme: cosmo
+        toc: yes
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "build") })
+---
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+# Setup
+library(pacman)
+p_load("tidyverse", "knitr", "DBI", "RSQLite", "summarytools", "Hmisc", "table1")
+```
+
+### Part 1. Load NHANES database and create a dataframe
+```{r}
+datab <- dbConnect(SQLite(), dbname = "~/Documents/EPI560/epi560.sqlite")
+
+query <- ("
+  SELECT * FROM P_AUQ
+      LEFT JOIN P_SLQ on P_AUQ.SEQN = P_SLQ.SEQN
+      LEFT JOIN P_DEMO on P_SLQ.SEQN = P_DEMO.SEQN
+      LEFT JOIN P_AUX on P_DEMO.SEQN = P_AUX.SEQN
+      LEFT JOIN P_FERTIN on P_AUX.SEQN = P_FERTIN.SEQN")
+
+Merged_Data <- dbGetQuery(datab, query)
+head(Merged_Data)
+```
+
+### Part 2
+```{r}
+# Histograms 
+hist <-Merged_Data[, c("RIDAGEYR", "SLD012", "LBDFERSI")]
+
+
+for (x in names(hist)) {
+     hist(hist[,x], 
+     main = paste("Histogram of", x), xlab = x,
+     col = "deepskyblue4", border = "lightcoral")}
+
+# Bar plots for categorical columns
+barp <-Merged_Data[, c("RIDRETH3","DMDEDUC2","AUQ054","AUQ400","AUQ060")]
+
+for (y in names(barp)) {
+     barplot(table(barp[,y]), 
+     main = paste("Barplot of", y), xlab = y, ylab = "Count", 
+     col = "firebrick", border = "goldenrod1")} 
+```
+
+```{r}
+# First add name labels and label values (codes)
+label(Merged_Data$RIDAGEYR) <-"Age (years)"
+
+Merged_Data$Gender <-factor(Merged_Data$RIAGENDR, levels=c(1:2), labels=c("Male", "Female"))
+table(Merged_Data$Gender, useNA = "always")
+
+Merged_Data$Race <-factor(Merged_Data$RIDRETH1, levels=c(1:5), 
+          labels=c("Mexican American", "Other Hispanic", "Non-Hispanic White", 
+          "Non-Hispanic Black", "Other Race"))
+
+table(Merged_Data$Race, useNA = "always")
+
+# Recode 7 and 9 to NA for education
+Merged_Data$DMDEDUC2[Merged_Data$DMDEDUC2 %in% c(7, 9)] <-NA
+
+Merged_Data$Education <-factor(Merged_Data$DMDEDUC2, levels=c(1:5), 
+          labels=c("<9th grade", "9-11th grade", "High school graduate/GED", 
+          "Some college", "College graduate"))
+
+table(Merged_Data$Education, useNA = "always")
+
+# Recode 7 and 9 to NA for general condition of hearing
+Merged_Data$AUQ054[Merged_Data$AUQ054 %in% c(77, 99)] <-NA
+
+Merged_Data$Hearing <-factor(Merged_Data$AUQ054, levels=c(1:6), 
+          labels=c("Excellent", "Good", "A little trouble", 
+          "Moderate hearing trouble", "A lot of trouble", "Deaf"))
+
+table(Merged_Data$Hearing, useNA = "always")
+
+label(Merged_Data$SLD012) <-"Sleep hours"
+
+label(Merged_Data$LBDFERSI) <-"Ferritin (ug/L)"
+
+#1b) Table 1
+Miss <-table1(~ RIDAGEYR + Gender + Race + Education + Hearing + SLD012 + 
+                   LBDFERSI, data=Merged_Data)
+Miss
+```
+
+```{r}
+#Function to summarize missingness
+Miss_Prop <-function(dataframe) {
+m <-sapply(dataframe, function(x) {
+data.frame(
+Missing = sum(is.na(x)),
+No. = length(x),
+Miss_Prop = sum(is.na(x))/length(x))
+})
+d <-data.frame(t(m))
+d <-sapply(d, unlist)
+d <-as.data.frame (d)
+d$Variable <-row.names (d)
+row.names(d) <- NULL
+d <-cbind(d[ncol(d)], d[-ncol(d)])
+return(d[order(d$Miss_Prop),])
+}
+
+kable(head(Miss_Prop(Merged_Data)), 
+      caption = "Missing Values")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
